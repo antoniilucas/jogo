@@ -1,0 +1,5 @@
+- Requisitos principais:
+publicar na web
+publicar no github
+requisitos dentro do github
+enviar link do repositório
