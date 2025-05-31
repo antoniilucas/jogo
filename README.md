@@ -1,10 +1,5 @@
 # 🧙‍♂️ Jogo de RPG 2D Web
 
-![GitHub repo size](https://img.shields.io/github/repo-size/username/repositorio)
-![GitHub contributors](https://img.shields.io/github/contributors/username/repositorio)
-![GitHub last commit](https://img.shields.io/github/last-commit/username/repositorio)
-![Made with Firebase](https://img.shields.io/badge/Made%20with-Firebase-orange)
-
 ### 👨‍🏫 Professor: Marcos Vinícius  
 
 ### 👥 Alunos:
