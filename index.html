@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8">
+  <title>Soul Knight Clone</title>
+  <style>
+    body {
+      margin: 0;
+      background: #000;
+      overflow: hidden;
+    }
+    canvas {
+      display: block;
+      margin: auto;
+      background: #222;
+    }
+  </style>
+</head>
+<body>
+
+<div id="startScreen" style="position: absolute; width: 100%; height: 100%; background: #111; color: white; display: none; flex-direction: column; align-items: center; justify-content: center;">
+  <h1 style="font-size: 48px; margin-bottom: 20px;">Meu Jogo</h1>
+  <button onclick="startGame()" style="padding: 12px 30px; font-size: 20px;">Iniciar</button>
+</div>
+
+
+  <!-- CANVAS AQUI 👇 -->
+  <canvas id="gameCanvas" width="800" height="600"></canvas>
+
+  <!-- Script do jogo -->
+  <script src="script.js"></script>
+</body>
+</html>
