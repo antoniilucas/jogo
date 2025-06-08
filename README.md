@@ -3,10 +3,10 @@
 ### 👨‍🏫 Professor: Marcos Vinícius  
 
 ### 👥 Alunos:
-- Alice Ferreira (Front-end)
-- Antônio Lucas Porangaba (Front-end)
-- Luan Cristian Bulhões (Front-end)
-- Paulo Henrique Macêdo (Front-end)
+- Alice Ferreira
+- Antônio Lucas Porangaba
+- Luan Cristian Bulhões
+- Paulo Henrique Macêdo
 
 #### Back-end e Banco de Dados foi utilizado o FireBase,
 
