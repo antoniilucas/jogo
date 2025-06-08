@@ -8,7 +8,7 @@
 - Luan Cristian Bulhões
 - Paulo Henrique Macêdo
 
-#### Back-end e Banco de Dados foi utilizado o FireBase,
+#### HTML, CSS, JavaScript | Back-end & Banco de Dados FireBase.
 
 ---
 
