@@ -4,11 +4,7 @@ canvas.width = window.innerWidth;
 canvas.height = window.innerHeight;
 document.getElementById("startScreen").style.display = "flex";
 
-
 const TILE = 32;
-const ROOM_WIDTH = 10;
-const ROOM_HEIGHT = 8;
-
 const tileImages = {
   0: new Image(), // chão
   1: new Image(), // parede
@@ -19,9 +15,8 @@ tileImages[0].src = "assets/tiles/floor.png";
 tileImages[1].src = "assets/tiles/wall.png";
 tileImages[2].src = "assets/tiles/door.png";
 
-
 let rooms = [];
-let roomMap = {}; // chave: "x,y" → sala
+let roomMap = {};
 let currentRoom = null;
 let player = { x: 100, y: 100, size: 30 };
 
@@ -36,16 +31,28 @@ for (const key in tileImages) {
   tileImages[key].onload = () => {
     loadedImages++;
     if (loadedImages === totalImages) {
-      // Só começa o jogo depois que tudo carregar
       generateMap();
       gameLoop();
     }
   };
 }
 
+function createRoom(x, y) {
+  return {
+    id: rooms.length,
+    x, y,
+    connections: { top: null, bottom: null, left: null, right: null },
+    cleared: false,
+    isBoss: false,
+    mobs: [],
+    type: null
+  };
+}
 
 function generateMap() {
-  const start = createRoom(0, 0); // Sala inicial
+  const start = createRoom(0, 0);
+  start.isStart = true; // <== Marca como a sala do tutorial
+
   rooms.push(start);
   roomMap["0,0"] = start;
 
@@ -66,30 +73,26 @@ function generateMap() {
     visited.add(`${newRoom.x},${newRoom.y}`);
   }
 
-  // Marcar sala final como boss
-  if (rooms.length > 1) {
-    rooms[rooms.length - 1].isBoss = true;
-  }
+  if (rooms.length > 1) rooms[rooms.length - 1].isBoss = true;
 
   currentRoom = start;
 
-  rooms[0].type = "tutorial";
-  rooms[1].type = "mob1";
-  rooms[2].type = "mob2";
-  rooms[3].type = "mob3";
-  rooms[4].type = "boss";
 
-}
+  // Definir tipos e adicionar mobs
+  rooms.forEach((room, index) => {
+    if (room.isStart) {
+      room.type = "tutorial";
+      // sem mobs
+    } else if (index === rooms.length - 1) {
+      room.type = "boss";
+      room.mobs.push(new Mob(canvas.width / 2 - 40, canvas.height / 2 - 40, "yellow"));
+    } else {
+      room.type = "mob";
+      room.mobs.push(new Mob(200, 200, "red"), new Mob(400, 300, "red"));
+    }
+  });
 
-function createRoom(x, y) {
-  return {
-    id: rooms.length,
-    x, y,
-    connections: { top: null, bottom: null, left: null, right: null },
-    cleared: false,
-    isBoss: false,
-    type: null // "tutorial", "mob1", "mob2", etc.
-  };
+
 }
 
 
@@ -116,11 +119,9 @@ function update() {
   if (keys["a"]) player.x -= 3;
   if (keys["d"]) player.x += 3;
 
-  // Transições por porta
-  const margin = 10;
-  const midX = canvas.width / 2;
-  const midY = canvas.height / 2;
+  currentRoom.mobs.forEach(mob => mob.update());
 
+  const margin = 10;
   if (player.y < margin && currentRoom.connections.top) {
     changeRoom(currentRoom.connections.top, "top");
   } else if (player.y + player.size > canvas.height - margin && currentRoom.connections.bottom) {
@@ -142,11 +143,12 @@ function changeRoom(nextRoom, direction) {
 
 function drawRoom() {
   drawTileMap();
-
+  currentRoom.mobs.forEach(mob => mob.draw());
   ctx.fillStyle = "#0af";
   ctx.fillRect(player.x, player.y, player.size, player.size);
-}
 
+  console.log("Mobs nesta sala:", currentRoom.mobs.length);
+}
 
 function gameLoop() {
   update();
@@ -154,50 +156,20 @@ function gameLoop() {
   requestAnimationFrame(gameLoop);
 }
 
-const tileSize = 32;
-
-const cols = Math.ceil(canvas.width / TILE);
-const rows = Math.ceil(canvas.height / TILE);
-
-const tileMap = [];
-for (let y = 0; y < rows; y++) {
-  tileMap[y] = [];
-  for (let x = 0; x < cols; x++) {
-    if (y === 0 || y === rows - 1 || x === 0 || x === cols - 1) {
-      tileMap[y][x] = 1; // parede
-    } else if (x === Math.floor(cols / 2) && y === Math.floor(rows / 2)) {
-      tileMap[y][x] = 2; // porta no meio
-    } else {
-      tileMap[y][x] = 0; // chão
-    }
-  }
-}
-
 function drawTileMap() {
   const cols = Math.ceil(canvas.width / TILE);
   const rows = Math.ceil(canvas.height / TILE);
-
   for (let y = 0; y < rows; y++) {
     for (let x = 0; x < cols; x++) {
-      let tileId = 0; // chão
+      let tileId = 0;
+      if (y === 0 || y === rows - 1 || x === 0 || x === cols - 1) tileId = 1;
 
-      // paredes
-      if (y === 0 || y === rows - 1 || x === 0 || x === cols - 1) {
-        tileId = 1;
-      }
-
-      // portas nas bordas, se houver conexão
       const midX = Math.floor(cols / 2);
       const midY = Math.floor(rows / 2);
-
-      if (currentRoom.connections.top && y === 0 && x === midX)
-        tileId = 2;
-      if (currentRoom.connections.bottom && y === rows - 1 && x === midX)
-        tileId = 2;
-      if (currentRoom.connections.left && x === 0 && y === midY)
-        tileId = 2;
-      if (currentRoom.connections.right && x === cols - 1 && y === midY)
-        tileId = 2;
+      if (currentRoom.connections.top && y === 0 && x === midX) tileId = 2;
+      if (currentRoom.connections.bottom && y === rows - 1 && x === midX) tileId = 2;
+      if (currentRoom.connections.left && x === 0 && y === midY) tileId = 2;
+      if (currentRoom.connections.right && x === cols - 1 && y === midY) tileId = 2;
 
       const img = tileImages[tileId];
       ctx.drawImage(img, x * TILE, y * TILE, TILE, TILE);
@@ -205,10 +177,23 @@ function drawTileMap() {
   }
 }
 
-for (const key in tileImages) {
-  tileImages[key].onload = () => {
-    loadedImages++;
-  };
+class Mob {
+  constructor(x, y, color = "red") {
+    this.x = x;
+    this.y = y;
+    this.size = 28;
+    this.color = color;
+    this.speed = 1;
+  }
+
+  draw() {
+    ctx.fillStyle = this.color;
+    ctx.fillRect(this.x, this.y, this.size, this.size);
+  }
+
+  update() {
+    // Movimento futuro
+  }
 }
 
 
