@@ -217,3 +217,70 @@ function startGame() {
     }, 100);
   }
 }
+
+class Entity {
+  constructor(x, y, sprite) {
+    this.x = x;
+    this.y = y;
+    this.sprite = sprite;
+
+    this.maxHp = 100;
+    this.hp = this.maxHp;
+    this.alive = true;
+
+    this.invulnerable = false;
+    this.invulnDuration = 1000; // em milissegundos
+    this.invulnTimer = 0;
+  }
+
+  takeDamage(amount) {
+    if (!this.alive || this.invulnerable) return;
+
+    this.hp -= amount;
+    console.log(`${this.constructor.name} recebeu ${amount} de dano`);
+
+    if (this.hp <= 0) {
+      this.hp = 0;
+      this.alive = false;
+      this.onDeath();
+    } else {
+      this.invulnerable = true;
+      this.invulnTimer = this.invulnDuration;
+    }
+  }
+
+  update(dt) {
+    if (this.invulnerable) {
+      this.invulnTimer -= dt;
+      if (this.invulnTimer <= 0) {
+        this.invulnerable = false;
+      }
+    }
+
+  }
+
+  draw(ctx) {
+    if (!this.alive) return;
+
+    if (this.invulnerable) {
+      ctx.globalAlpha = 0.5; // transparente durante invulnerabilidade
+    }
+
+    ctx.drawImage(this.sprite, this.x, this.y);
+
+    ctx.globalAlpha = 1.0; // resetar
+  }
+
+  drawHpBar(ctx, offsetY = -10) {
+    const barWidth = 40;
+    const ratio = this.hp / this.maxHp;
+    ctx.fillStyle = 'red';
+    ctx.fillRect(this.x - barWidth/2, this.y + offsetY, barWidth, 5);
+    ctx.fillStyle = 'green';
+    ctx.fillRect(this.x - barWidth/2, this.y + offsetY, barWidth * ratio, 5);
+  }
+
+  onDeath() {
+    console.log(`${this.constructor.name} morreu.`);
+  }
+}
