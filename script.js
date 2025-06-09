@@ -284,3 +284,54 @@ class Entity {
     console.log(`${this.constructor.name} morreu.`);
   }
 }
+
+class Player extends Entity {
+  constructor(x, y, sprite) {
+    super(x, y, sprite);
+
+    this.attackRange = 50;
+    this.attackDamage = 20;
+    this.attackCooldown = 500; // em ms
+    this.attackTimer = 0;
+  }
+
+  update(dt, enemies) {
+    super.update(dt);
+    if (this.attackTimer > 0) {
+      this.attackTimer -= dt;
+    }
+
+    // chamada de ataque (por exemplo, tecla espaço)
+    if (this.wantToAttack && this.attackTimer <= 0) {
+      this.attack(enemies);
+      this.attackTimer = this.attackCooldown;
+    }
+  }
+
+  attack(enemies) {
+    console.log("Jogador atacou!");
+
+    enemies.forEach(enemy => {
+      const dx = enemy.x - this.x;
+      const dy = enemy.y - this.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+
+      if (dist <= this.attackRange && enemy.alive) {
+        enemy.takeDamage(this.attackDamage);
+      }
+    });
+  }
+}
+
+document.addEventListener("keydown", (e) => {
+  if (e.code === "Space") {
+    player.wantToAttack = true;
+  }
+});
+
+document.addEventListener("keyup", (e) => {
+  if (e.code === "Space") {
+    player.wantToAttack = false;
+  }
+});
+
