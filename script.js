@@ -26,7 +26,66 @@ let player = {
   hp: 100,
   maxHp: 100,
   invincible: false, // para evitar hit contínuo
+  weapon: {
+    name: "Espada de Ferro",
+    damage: 20,
+    reach: 40
+  }
 };
+let droppedItems = [];
+
+
+
+class Item {
+  constructor(id, name, description, attributes, stackable = false) {
+    this.id = id;
+    this.name = name;
+    this.description = description;
+    this.attributes = attributes;
+    this.stackable = stackable;
+    this.quantity = 1;
+  }
+}
+
+class Inventory {
+  constructor(size) {
+    this.size = size;
+    this.items = [];
+  }
+
+  addItem(newItem) {
+    if (newItem.stackable) {
+      const existing = this.items.find(i => i.id === newItem.id);
+      if (existing) {
+        existing.quantity += newItem.quantity;
+        return true;
+      }
+    }
+    if (this.items.length < this.size) {
+      this.items.push(newItem);
+      return true;
+    }
+    return false;
+  }
+}
+
+const inventory = new Inventory(10);
+
+// Itens exemplo
+
+const potion = new Item(
+  "potion",
+  "Poção de Vida",
+  "Restaura 15 de vida",
+  { heal: 15 },
+  true
+);
+
+// Adicione no inventário para teste
+inventory.addItem(new Item("potion", "Poção de Vida", "Restaura 15 de vida", { heal: 15 }, true));
+inventory.addItem(new Item("potion", "Poção de Vida", "Restaura 15 de vida", { heal: 15 }, true));
+
+let inventoryOpen = false;
 
 
 const keys = {};
@@ -37,6 +96,18 @@ window.addEventListener("mousedown", e => {
     attack();
   }
 });
+window.addEventListener("keydown", e => {
+  if (e.key.toLowerCase() === "i") {
+    inventoryOpen = !inventoryOpen;
+  }
+});
+let mouse = { x: 0, y: 0 };
+
+canvas.addEventListener("mousemove", e => {
+  mouse.x = e.clientX;
+  mouse.y = e.clientY;
+});
+
 
 
 let loadedImages = 0;
@@ -139,21 +210,81 @@ function isColliding(a, b) {
   );
 }
 
+let mobKillCount = 0;
+let firstDoubleKillNotified = false;
+let pentaKillNotified = false;
+
+
 function attack() {
-  const attackRange = 50;
+  const reach = player.weapon.reach;
+  const damage = player.weapon.damage;
 
   currentRoom.mobs.forEach(mob => {
     const dx = mob.x + mob.size / 2 - (player.x + player.size / 2);
     const dy = mob.y + mob.size / 2 - (player.y + player.size / 2);
     const distance = Math.hypot(dx, dy);
 
-    if (distance <= attackRange) {
-      mob.hp -= 20;
+    if (distance <= reach) {
+      mob.hp -= damage;
+      if (mob.hp <= 0 && !mob.markedForDeath) {
+        mob.markedForDeath = true; // evitar contar a mesma morte mais de uma vez
+        droppedItems.push(new DroppedItem(mob.x, mob.y, potion));
+        mobKillCount++;
+
+        // Notificações
+        if (mobKillCount === 2 && !firstDoubleKillNotified) {
+          showNotification("Você foi o primeiro a matar dois monstros!");
+          firstDoubleKillNotified = true;
+        }
+
+        if (mobKillCount === 5 && !pentaKillNotified) {
+          showNotification("Pentakill! Você é um guerreiro incrível!");
+          pentaKillNotified = true;
+        }
+      }
     }
   });
 }
 
+function showNotification(text) {
+  const notification = document.createElement("div");
+  notification.textContent = text;
+  notification.style.position = "absolute";
+  notification.style.top = "20px";
+  notification.style.left = "50%";
+  notification.style.transform = "translateX(-50%)";
+  notification.style.background = "black";
+  notification.style.color = "white";
+  notification.style.padding = "10px 20px";
+  notification.style.border = "2px solid white";
+  notification.style.fontSize = "18px";
+  notification.style.zIndex = 1000;
+  notification.style.borderRadius = "10px";
+  document.body.appendChild(notification);
+
+  setTimeout(() => {
+    notification.remove();
+  }, 3000);
+}
+
+
+
 function update() {
+  if (inventoryOpen) return; // pausa movimentação e lógica quando inventário aberto
+
+  droppedItems = droppedItems.filter(dropped => {
+    if (dropped.isPickedUp(player)) {
+      if (inventory.addItem(dropped.item)) {
+        showNotification(`Você pegou: ${dropped.item.name}`);
+        return false; // remove da lista
+      } else {
+        showNotification("Inventário cheio!");
+        return true;
+      }
+    }
+    return true;
+  });
+
   // Movimento do player
   const speed = 3;
   let nextX = player.x;
@@ -195,6 +326,9 @@ function update() {
   }
 }
 
+
+
+
 function changeRoom(nextRoom, direction) {
   currentRoom = nextRoom;
   if (direction === "top") player.y = canvas.height - player.size - 15;
@@ -206,11 +340,29 @@ function changeRoom(nextRoom, direction) {
 
 
 function drawRoom() {
- 
+
   drawTileMap();
+  droppedItems.forEach(item => item.draw());
+
+
   currentRoom.mobs.forEach(mob => mob.draw());
-  ctx.fillStyle = "#0af";
-  ctx.fillRect(player.x, player.y, player.size, player.size);
+
+  drawFace(player.x + player.size / 2, player.y + player.size / 2);
+  // Espada como linha reta apontada para o mouse
+  const angle = Math.atan2(mouse.y - (player.y + player.size / 2), mouse.x - (player.x + player.size / 2));
+  const swordLength = 25;
+  const swordX1 = player.x + player.size * 0.75;
+  const swordY1 = player.y + player.size * 0.85;
+  const swordX2 = swordX1 + Math.cos(angle) * swordLength;
+  const swordY2 = swordY1 + Math.sin(angle) * swordLength;
+
+  ctx.strokeStyle = "silver";
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  ctx.moveTo(swordX1, swordY1);
+  ctx.lineTo(swordX2, swordY2);
+  ctx.stroke();
+
 
   // Barra de vida com texto
   ctx.fillStyle = "black";
@@ -231,11 +383,127 @@ function drawRoom() {
   console.log("Mobs nesta sala:", currentRoom.mobs.length);
 }
 
+function drawInventory() {
+  // Fundo semi-transparente
+  ctx.fillStyle = "rgba(0,0,0,0.7)";
+  ctx.fillRect(50, 50, 400, 400);
+
+  ctx.fillStyle = "white";
+  ctx.font = "18px Arial";
+  ctx.fillText("Inventário", 60, 80);
+
+  const slotSize = 50;
+  const padding = 10;
+
+  inventory.items.forEach((item, i) => {
+    const x = 60 + (i % 5) * (slotSize + padding);
+    const y = 100 + Math.floor(i / 5) * (slotSize + padding);
+
+    ctx.fillStyle = "#444";
+    ctx.fillRect(x, y, slotSize, slotSize);
+
+    ctx.fillStyle = "white";
+    ctx.fillText(item.name, x + 5, y + 20);
+    if (item.stackable && item.quantity > 1) {
+      ctx.fillText(`x${item.quantity}`, x + 5, y + 40);
+    }
+  });
+}
+
+// Ajuste a função para aceitar item ID correto (potion)
+function useItem(itemId) {
+  if (itemId === "potion") {
+    if (player.hp < player.maxHp) {
+      player.hp = Math.min(player.hp + 15, player.maxHp); // 15 conforme descrição
+      showNotification("Poção de vida usada! +15 HP");
+      return true;
+    } else {
+      showNotification("HP já está cheio!");
+      return false;
+    }
+  }
+  return false;
+}
+
+// Adicione este método à classe Inventory
+Inventory.prototype.useItem = function(itemId) {
+  const itemIndex = this.items.findIndex(i => i.id === itemId);
+  if (itemIndex === -1) return false;
+
+  const item = this.items[itemIndex];
+  if (useItem(item.id)) { // chama a função global que aplica o efeito
+    // Se for empilhável, diminui a quantidade
+    if (item.stackable) {
+      item.quantity--;
+      if (item.quantity <= 0) this.items.splice(itemIndex, 1);
+    } else {
+      this.items.splice(itemIndex, 1);
+    }
+    return true;
+  }
+  return false;
+}
+
+// Corrija o listener para:
+document.addEventListener("keydown", (event) => {
+  if (event.key === "1") {
+    if (inventory.useItem("potion")) {
+      // Poção usada e removida dentro do método inventory.useItem
+    }
+  }
+});
+
+ 
+
+canvas.addEventListener("click", e => {
+  if (!inventoryOpen) return;
+
+  const rect = canvas.getBoundingClientRect();
+  const clickX = e.clientX - rect.left;
+  const clickY = e.clientY - rect.top;
+
+  const slotSize = 50;
+  const padding = 10;
+
+  for (let i = 0; i < inventory.items.length; i++) {
+    const x = 60 + (i % 5) * (slotSize + padding);
+    const y = 100 + Math.floor(i / 5) * (slotSize + padding);
+
+    if (
+      clickX >= x && clickX <= x + slotSize &&
+      clickY >= y && clickY <= y + slotSize
+    ) {
+      showItemDetails(inventory.items[i]);
+      break;
+    }
+  }
+});
+
+function showItemDetails(item) {
+  ctx.fillStyle = "rgba(0,0,0,0.8)";
+  ctx.fillRect(470, 50, 300, 200);
+
+  ctx.fillStyle = "white";
+  ctx.font = "16px Arial";
+  ctx.fillText(`Nome: ${item.name}`, 480, 80);
+  ctx.fillText(`Descrição: ${item.description}`, 480, 110);
+
+  if (item.attributes.damage) {
+    ctx.fillText(`Dano: ${item.attributes.damage[0]} - ${item.attributes.damage[1]}`, 480, 140);
+  }
+  if (item.attributes.heal) {
+    ctx.fillText(`Cura: ${item.attributes.heal}`, 480, 140);
+  }
+}
 
 
 function gameLoop() {
   update();
   drawRoom();
+
+  if (inventoryOpen) {
+    drawInventory();
+  }
   requestAnimationFrame(gameLoop);
 }
 
@@ -253,10 +521,10 @@ function drawTileMap() {
 
       const midX = Math.floor(cols / 2);
       const midY = Math.floor(rows / 2);
-      if (currentRoom.connections.top && y === 0 && x === midX) tileId = 2;
-      if (currentRoom.connections.bottom && y === rows - 1 && x === midX) tileId = 2;
-      if (currentRoom.connections.left && x === 0 && y === midY) tileId = 2;
-      if (currentRoom.connections.right && x === cols - 1 && y === midY) tileId = 2;
+      if (currentRoom.connections.top && y === 0 && (x === midX || x === midX - 1 || x === midX + 1)) tileId = 2;
+      if (currentRoom.connections.bottom && y === rows - 1 && (x === midX || x === midX - 1 || x === midX + 1)) tileId = 2;
+      if (currentRoom.connections.left && x === 0 && (y === midY || y === midY - 1 || y === midY + 1)) tileId = 2;
+      if (currentRoom.connections.right && x === cols - 1 && (y === midY || y === midY - 1 || y === midY + 1)) tileId = 2;
 
       const img = tileImages[tileId];
       ctx.drawImage(img, x * TILE, y * TILE, TILE, TILE);
@@ -307,6 +575,28 @@ function drawTutorial() {
   });
 }
 
+class DroppedItem {
+  constructor(x, y, item) {
+    this.x = x;
+    this.y = y;
+    this.size = 20; // tamanho do quadrado no chão
+    this.item = item;
+  }
+
+  draw() {
+    ctx.fillStyle = "green"; // cor para a poção, você pode usar uma imagem também
+    ctx.fillRect(this.x, this.y, this.size, this.size);
+
+    ctx.fillStyle = "white";
+    ctx.font = "14px Arial";
+    ctx.fillText(this.item.name, this.x, this.y - 5);
+  }
+
+  isPickedUp(player) {
+    return isColliding(this, player);
+  }
+}
+
 
 class Mob {
   constructor(x, y, color = "red") {
@@ -321,19 +611,50 @@ class Mob {
   }
 
   draw() {
-    // Desenha o mob (quadrado vermelho)
+    // Corpo do mob (quadrado vermelho)
     ctx.fillStyle = this.color;
     ctx.fillRect(this.x, this.y, this.size, this.size);
 
-    // Desenha a barra de vida em cima do mob
+    // Barra de vida
     ctx.fillStyle = "black";
     ctx.fillRect(this.x, this.y - 8, this.size, 6);
     ctx.fillStyle = "red";
     ctx.fillRect(this.x, this.y - 8, (this.hp / this.maxHp) * this.size, 6);
     ctx.strokeStyle = "white";
     ctx.strokeRect(this.x, this.y - 8, this.size, 6);
-  }
 
+    // Olhos raivosos
+    const eyeSize = 6;
+    const eyeY = this.y + 8;
+    const leftEyeX = this.x + 6;
+    const rightEyeX = this.x + this.size - 12;
+
+    // Fundo branco dos olhos
+    ctx.fillStyle = "white";
+    ctx.fillRect(leftEyeX, eyeY, eyeSize, eyeSize);
+    ctx.fillRect(rightEyeX, eyeY, eyeSize, eyeSize);
+
+    // Pupilas pretas
+    ctx.fillStyle = "black";
+    ctx.fillRect(leftEyeX + 2, eyeY + 2, 2, 2);
+    ctx.fillRect(rightEyeX + 2, eyeY + 2, 2, 2);
+
+    // Sobrancelhas inclinadas para dar raiva
+    ctx.strokeStyle = "black";
+    ctx.lineWidth = 2;
+
+    // Sobrancelha esquerda (da esquerda para direita inclinada para baixo)
+    ctx.beginPath();
+    ctx.moveTo(leftEyeX, eyeY);
+    ctx.lineTo(leftEyeX + eyeSize, eyeY - 4);
+    ctx.stroke();
+
+    // Sobrancelha direita (da direita para esquerda inclinada para baixo)
+    ctx.beginPath();
+    ctx.moveTo(rightEyeX + eyeSize, eyeY);
+    ctx.lineTo(rightEyeX, eyeY - 4);
+    ctx.stroke();
+  }
 
   update() {
     const dx = player.x - this.x;
@@ -345,9 +666,31 @@ class Mob {
       this.y += (dy / dist) * this.speed;
     }
   }
-
 }
 
+
+
+
+function drawFace(x, y) {
+  // Cabeça
+  ctx.fillStyle = "#FFD1A4";
+  ctx.beginPath();
+  ctx.arc(x, y, 16, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Olhos
+  ctx.fillStyle = "black";
+  ctx.beginPath();
+  ctx.arc(x - 5, y - 5, 2, 0, Math.PI * 2);
+  ctx.arc(x + 5, y - 5, 2, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Boca
+  ctx.strokeStyle = "black";
+  ctx.beginPath();
+  ctx.arc(x, y + 4, 6, 0, Math.PI);
+  ctx.stroke();
+}
 
 function startGame() {
   document.getElementById("startScreen").style.display = "none";
