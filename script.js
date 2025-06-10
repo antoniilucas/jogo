@@ -10,6 +10,7 @@ const tileImages = {
   1: new Image(), // parede
   2: new Image(), // porta
 };
+let collisionMap = [];
 
 tileImages[0].src = "assets/tiles/floor.png";
 tileImages[1].src = "assets/tiles/wall.png";
@@ -18,11 +19,25 @@ tileImages[2].src = "assets/tiles/door.png";
 let rooms = [];
 let roomMap = {};
 let currentRoom = null;
-let player = { x: 100, y: 100, size: 30 };
+let player = {
+  x: 100,
+  y: 100,
+  size: 30,
+  hp: 100,
+  maxHp: 100,
+  invincible: false, // para evitar hit contínuo
+};
+
 
 const keys = {};
 window.addEventListener("keydown", e => keys[e.key] = true);
 window.addEventListener("keyup", e => keys[e.key] = false);
+window.addEventListener("mousedown", e => {
+  if (e.button === 0) { // botão esquerdo do mouse (M1)
+    attack();
+  }
+});
+
 
 let loadedImages = 0;
 const totalImages = Object.keys(tileImages).length;
@@ -113,13 +128,60 @@ function randomDirection(x, y, visited) {
   return [null, null, null, null];
 }
 
-function update() {
-  if (keys["w"]) player.y -= 3;
-  if (keys["s"]) player.y += 3;
-  if (keys["a"]) player.x -= 3;
-  if (keys["d"]) player.x += 3;
 
-  currentRoom.mobs.forEach(mob => mob.update());
+
+function isColliding(a, b) {
+  return (
+    a.x < b.x + b.size &&
+    a.x + a.size > b.x &&
+    a.y < b.y + b.size &&
+    a.y + a.size > b.y
+  );
+}
+
+function attack() {
+  const attackRange = 50;
+
+  currentRoom.mobs.forEach(mob => {
+    const dx = mob.x + mob.size / 2 - (player.x + player.size / 2);
+    const dy = mob.y + mob.size / 2 - (player.y + player.size / 2);
+    const distance = Math.hypot(dx, dy);
+
+    if (distance <= attackRange) {
+      mob.hp -= 20;
+    }
+  });
+}
+
+function update() {
+  // Movimento do player
+  const speed = 3;
+  let nextX = player.x;
+  let nextY = player.y;
+
+  if (keys["w"]) nextY -= speed;
+  if (keys["s"]) nextY += speed;
+  if (keys["a"]) nextX -= speed;
+  if (keys["d"]) nextX += speed;
+
+  if (canMoveTo(nextX, player.y, player.size)) player.x = nextX;
+  if (canMoveTo(player.x, nextY, player.size)) player.y = nextY;
+
+  // Atualiza mobs e remove os mortos
+  currentRoom.mobs = currentRoom.mobs.filter(mob => {
+    mob.update();
+    return mob.hp > 0;
+  });
+
+  // Checa colisão e dano do player
+  currentRoom.mobs.forEach(mob => {
+    if (isColliding(player, mob) && !player.invincible) {
+      player.hp -= 10;
+      player.invincible = true;
+      setTimeout(() => player.invincible = false, 1000);
+    }
+  });
+
 
   const margin = 10;
   if (player.y < margin && currentRoom.connections.top) {
@@ -141,14 +203,35 @@ function changeRoom(nextRoom, direction) {
   if (direction === "right") player.x = 15;
 }
 
+
+
 function drawRoom() {
+ 
   drawTileMap();
   currentRoom.mobs.forEach(mob => mob.draw());
   ctx.fillStyle = "#0af";
   ctx.fillRect(player.x, player.y, player.size, player.size);
 
+  // Barra de vida com texto
+  ctx.fillStyle = "black";
+  ctx.fillRect(20, 20, 104, 24);
+
+  ctx.fillStyle = "red";
+  ctx.fillRect(22, 22, (player.hp / player.maxHp) * 100, 20);
+
+  ctx.strokeStyle = "white";
+  ctx.strokeRect(20, 20, 104, 24);
+
+  // Texto HP
+  ctx.font = "16px Arial";
+  ctx.fillStyle = "white";
+  ctx.fillText(`HP: ${player.hp} / ${player.maxHp}`, 130, 38);
+
+
   console.log("Mobs nesta sala:", currentRoom.mobs.length);
 }
+
+
 
 function gameLoop() {
   update();
@@ -159,9 +242,13 @@ function gameLoop() {
 function drawTileMap() {
   const cols = Math.ceil(canvas.width / TILE);
   const rows = Math.ceil(canvas.height / TILE);
+  collisionMap = [];
+
   for (let y = 0; y < rows; y++) {
+    const row = [];
     for (let x = 0; x < cols; x++) {
       let tileId = 0;
+
       if (y === 0 || y === rows - 1 || x === 0 || x === cols - 1) tileId = 1;
 
       const midX = Math.floor(cols / 2);
@@ -173,9 +260,53 @@ function drawTileMap() {
 
       const img = tileImages[tileId];
       ctx.drawImage(img, x * TILE, y * TILE, TILE, TILE);
+
+      row.push(tileId);
     }
+    collisionMap.push(row);
   }
 }
+
+
+
+function canMoveTo(x, y, size) {
+  const corners = [
+    [x, y],
+    [x + size - 1, y],
+    [x, y + size - 1],
+    [x + size - 1, y + size - 1]
+  ];
+
+  return corners.every(([cx, cy]) => {
+    const tileX = Math.floor(cx / TILE);
+    const tileY = Math.floor(cy / TILE);
+    const tile = collisionMap[tileY]?.[tileX];
+    return tile !== 1; // 1 = parede, bloqueia
+  });
+}
+
+
+
+function drawTutorial() {
+  const lines = [
+    "Use W A S D para se mover.",
+    "Clique com o botão esquerdo (M1) para atacar.",
+    "Mobs podem dropar itens ao morrer.",
+    "Mate o chefe final para completar o jogo!"
+  ];
+
+  ctx.font = "20px Arial";
+  ctx.fillStyle = "white";
+  ctx.strokeStyle = "black";
+
+  lines.forEach((line, i) => {
+    const textX = 50;
+    const textY = 100 + i * 30;
+    ctx.strokeText(line, textX, textY);
+    ctx.fillText(line, textX, textY);
+  });
+}
+
 
 class Mob {
   constructor(x, y, color = "red") {
@@ -184,16 +315,37 @@ class Mob {
     this.size = 28;
     this.color = color;
     this.speed = 1;
+
+    this.maxHp = 50;
+    this.hp = this.maxHp;
   }
 
   draw() {
+    // Desenha o mob (quadrado vermelho)
     ctx.fillStyle = this.color;
     ctx.fillRect(this.x, this.y, this.size, this.size);
+
+    // Desenha a barra de vida em cima do mob
+    ctx.fillStyle = "black";
+    ctx.fillRect(this.x, this.y - 8, this.size, 6);
+    ctx.fillStyle = "red";
+    ctx.fillRect(this.x, this.y - 8, (this.hp / this.maxHp) * this.size, 6);
+    ctx.strokeStyle = "white";
+    ctx.strokeRect(this.x, this.y - 8, this.size, 6);
   }
 
+
   update() {
-    // Movimento futuro
+    const dx = player.x - this.x;
+    const dy = player.y - this.y;
+    const dist = Math.hypot(dx, dy);
+
+    if (dist > 1) {
+      this.x += (dx / dist) * this.speed;
+      this.y += (dy / dist) * this.speed;
+    }
   }
+
 }
 
 
